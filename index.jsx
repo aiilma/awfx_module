@@ -31,8 +31,8 @@ function initLayersCreator(lrGetterCb, lrCreatorCb) {
         // test
         dataLr.sourceText
             // .setValue("");
-            // .setValue("abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaawwwwwwwiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiihhhoeoeoaeaoeaoaaaaaaaaemm,aoccmjw,aw,wuwiwiiiiicca");
-            .setValue("abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaa");
+            // .setValue("abmeoa,d.guccuiigii");
+            .setValue("abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaawwwwwwwiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiihhhoeoeoaeaoeaoaaaaaaaaemm,aoccmjw,aw,wuwiwiiiiicca");
 
         if ((mockLr = lrGetterCb(mockLrName))) mockLr.remove();
         mockLr = lrCreatorCb(mockLrName, false);
@@ -78,6 +78,8 @@ function popChar(layer) {
         layer.sourceText.setValue(newText);
     }
 }
+// ^ stable
+//
 function areaExceedCreator(getContentDimensionsCb, putCharCb) {
     return function (areaLr) {
         var maxWidthArea = getContentDimensionsCb(areaLr)['w'];
@@ -119,47 +121,35 @@ function getContentDimensions(layer) {
         h: hDim,
     };
 }
-function splitSubCreator(useAsAreaExceederCb) {
+function getSubsCreator(useAsAreaExceederCb, putCharCb) {
     return function (dataLr, mockLr) {
         var willExceedAfterPutCb = useAsAreaExceederCb(dataLr);
-        var oldText = mockLr.sourceText.value.text;
-        var sub = '';
-        mockLr.sourceText.setValue(sub);
-
-        for (var i = 0; i < oldText.length; i++) {
-            var ch = oldText[i];
-
-            if (willExceedAfterPutCb(mockLr, ch)) break;
-
-            sub = sub.concat(ch);
-            mockLr.sourceText.setValue(sub);
-        }
-
-        mockLr.sourceText.setValue(oldText);
-        return sub;
-    }
-}
-function getSubsCreator(handleSubCb) {
-    return function (dataLr, mockLr) {
-        var oldText = mockLr.sourceText.value.text; // нужен ли mockText.. может, убрать, чтобы зависеть от основного (обрезая его по условию) и закидывать буковки в результирующую строку
+        var fullText = mockLr.sourceText.value.text; // нужен ли mockText.. может, убрать, чтобы зависеть от основного (обрезая его по условию) и закидывать буковки в результирующую строку
         var subs = [];
 
-        while (mockLr.sourceText.value.text.length) {
-            // извлечь подстроку
-            var newSub = handleSubCb(dataLr, mockLr);
-            // закинуть её в массив подстрок
-            subs.push(newSub);
+        mockLr.sourceText.setValue("");
+        for (var i = 0; i < fullText.length; i++) {
+            var ch = fullText[i], currSub = mockLr.sourceText.value.text;
+            var isCharLast = (i === fullText.length - 1)
 
-            // обновить значение слоя до обрезанного с самого начала по длинне подстроки
-            var updatedText = (mockLr.sourceText.value.text).slice(newSub.length);
-            mockLr.sourceText.setValue(updatedText);
+            if (!willExceedAfterPutCb(mockLr, ch) && !isCharLast) {
+                putCharCb(mockLr)(ch);
+            } else {
+                if (isCharLast) {
+                    putCharCb(mockLr)(ch);
+                    currSub = mockLr.sourceText.value.text;
+                } else { // ограничение по ширине
+                    mockLr.sourceText.setValue(ch)
+                }
+                subs.push(currSub);
+            }
         }
 
-        mockLr.sourceText.setValue(oldText);
+        mockLr.sourceText.setValue(fullText);
         return subs;
     }
 }
-// ^ stable
+//
 
 
 // PREPARE PROJECT
@@ -173,8 +163,8 @@ var getLayer = getLayerCreator(lrs),
     initLayers = initLayersCreator(getLayer, createServeLayer),
     syncLrAttributes = syncLrAttributesCreator(createServeLayer),
     useAsAreaExceeder = areaExceedCreator(getContentDimensions, putChar),
-    splitSub = splitSubCreator(useAsAreaExceeder),
-    getSubs = getSubsCreator(splitSub);
+    getSubs = getSubsCreator(useAsAreaExceeder, putChar);
+;
 
 try {
     // INIT
@@ -183,14 +173,8 @@ try {
     mockLr = syncLrAttributes(dataLr, bunchLrs['mock']);
 
     // MAIN LOGIC
-    // обращаться по индексу массива к строке, которая будет содержать последний видимый символ в слое реальных данных
-    var subs = getSubs(dataLr, mockLr).join('\n');
-    alert(subs);
-    mockLr.sourceText.setValue(subs);
-
-    alert('width' + '\n\n' + 'data: ' + '\t' + getContentDimensions(dataLr)['w'] + '\n' + 'mock: ' + '\t' + getContentDimensions(dataLr)['w']);
-    alert('height' + '\n\n' + 'data: ' + '\t' + getContentDimensions(dataLr)['h'] + '\n' + 'mock: ' + '\t' + getContentDimensions(mockLr)['h']);
-    // alert(subs.join('\n'));
+    var subs = getSubs(dataLr, mockLr);
+    alert(subs.join('\n'));
 } catch (e) {
     alert(e.message)
 }
