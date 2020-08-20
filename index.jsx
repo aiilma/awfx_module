@@ -1,5 +1,28 @@
-// function useHandler() {
-// }
+// ========================================DEV HELPERS==================================================
+function testDims(data, mock, dim) {
+    dim = (dim === 'h' || dim === 'w') ? dim : 'all';
+
+    var dataW = getContentDimensions(data)['w'];
+    var mockW = getContentDimensions(mock)['w'];
+    var dataH = getContentDimensions(data)['h'];
+    var mockH = getContentDimensions(mock)['h'];
+
+    if (dim === 'w') {
+        alert('\t' +'width' + '\n' + 'data: ' + dataW + '\n' + 'mock: ' + mockW + '\n' + 'equals: ' + eval(dataW === mockW));
+    } else if (dim === 'h') {
+        alert('\t' +'height' + '\n' + 'data: ' + dataH + '\n' + 'mock: ' + mockH + '\n' + 'equals: ' + eval(dataH === mockH));
+    } else {
+        alert('\t' +'width' + '\n' + 'data: ' + dataW + '\n' + 'mock: ' + mockW + '\n' + 'equals: ' + eval(dataW === mockW));
+        alert('\t' +'height' + '\n' + 'data: ' + dataH + '\n' + 'mock: ' + mockH + '\n' + 'equals: ' + eval(dataH === mockH));
+    }
+}
+// ========================================DEV HELPERS==================================================
+function removeLayers() {
+    for (var layerId = 0; layerId < arguments.length; layerId++) {
+        if (!arguments[layerId] instanceof TextLayer) throw new Error(arguments[layerId].name + " must be an instance of TextLayer");
+        arguments[layerId].remove();
+    }
+}
 function getLayerCreator(layerCollection) {
     return function (name) {
         var layer;
@@ -21,18 +44,18 @@ function serveLayerCreator(lrCollection) {
         return newLr;
     }
 }
-function initLayersCreator(lrGetterCb, lrCreatorCb) {
+function initLayersCreator(lrGetterCb, lrCreatorCb, testStr) {
+    testStr = (testStr !== undefined && typeof testStr === 'string') ? testStr : false;
+
     return function (dataLrName, mockLrName) {
         var dataLr, mockLr, res = {};
 
         if (!(dataLr = lrGetterCb(dataLrName)))
             throw new Error("Such a layer doesn't exist");
 
-        // test
-        dataLr.sourceText
-            // .setValue("");
-            // .setValue("abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaawwwwwwwiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiihhhoeoeoaeaoeaoaaaaaaaaemm,aoccmjw,aw,wuwiwiiiiicca");
-            .setValue("abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaa");
+        if (testStr) {
+            dataLr.sourceText.setValue(testStr);
+        }
 
         if ((mockLr = lrGetterCb(mockLrName))) mockLr.remove();
         mockLr = lrCreatorCb(mockLrName, false);
@@ -159,20 +182,79 @@ function getSubsCreator(handleSubCb) {
         return subs;
     }
 }
-// ^ stable
+//---------
+function willExceedHeightAfterPut(getContentDimensionsCb, putCharCb) {
+    return function (areaLr) {
+        var maxWidthArea = getContentDimensionsCb(areaLr)['h'];
+        return function (dupLr, sub) {
+            // alert(mockLr.sourceText.value.text);
+            var oldText = dupLr.sourceText.value.text,
+                result;
+
+            putCharCb(dupLr)(sub);
+            result = (getContentDimensionsCb(dupLr)['h'] > maxWidthArea);
+
+            dupLr.sourceText.setValue(oldText); // revert old text
+            return result;
+        }
+    }
+}
+function getLastSubIdIfExceedsByHeight(subsArr, dataLr) {
+    // дублировать слой с данными
+    var dataLrDuplicate = dataLr.duplicate();
+    var textDocument = dataLrDuplicate.sourceText.value;
+    textDocument.boxTextSize = [textDocument.boxTextSize[0], textDocument.boxTextSize[1] * 2]; // высота box'a в два раза > от высоты слоя с данными
+    textDocument.text = ""; // очистить текст дублированного слоя
+    dataLrDuplicate.sourceText.setValue(textDocument);
+
+    for (var i = 0; i < subsArr.length; i++) {
+        var s = subsArr[i];
+
+        // если i-ая строка может превысеть высоту слоя с данными, то вернуть индекс текущей строки
+        if (useAsHeightAreaExceeder(dataLr)(dataLrDuplicate, s)) {
+            removeLayers(dataLrDuplicate);
+            return i;
+        }
+
+        // положить i-ую строку из subs в дубликат
+        var newStr = (dataLrDuplicate.sourceText.value.text).concat(s);
+        dataLrDuplicate.sourceText.setValue(newStr);
+    }
+
+    removeLayers(dataLrDuplicate);
+    return undefined;
+}
+function calcExceededSub(subsArr, lastBoxRowId, srcDataValue) {
+    var exceededSub = '';
+
+    if (lastBoxRowId !== undefined) {
+        for(var idx = 0; idx < lastBoxRowId; idx++) {
+            exceededSub = exceededSub.concat(subsArr[idx]);
+        }
+
+        exceededSub = srcDataValue.slice(exceededSub.length)
+    }
+
+    return exceededSub;
+}
 
 
 // PREPARE PROJECT
 var p = app.project.activeItem, // текущая композиция (main при тестах)
     lrs = p.layers,
+    // testStr = '',
+    // testStr = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    testStr = 'abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaawwwwwwwiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiihhhoeoeoaeaoeaoaaaaaaaaemm,aoccmjw,aw,wuwiwiiiiicca',
+    // testStr = 'abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaawwwwwwwiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiihh',
     bunchLrs, dataLr, mockLr;
 
 // HOCS CONFIG
 var getLayer = getLayerCreator(lrs),
-    createServeLayer = serveLayerCreator(lrs),
-    initLayers = initLayersCreator(getLayer, createServeLayer),
-    syncLrAttributes = syncLrAttributesCreator(createServeLayer),
+    createLayer = serveLayerCreator(lrs),
+    initLayers = initLayersCreator(getLayer, createLayer, testStr),
+    syncLrAttributes = syncLrAttributesCreator(createLayer),
     useAsAreaExceeder = areaExceedCreator(getContentDimensions, putChar),
+    useAsHeightAreaExceeder = willExceedHeightAfterPut(getContentDimensions, putChar),
     splitSub = splitSubCreator(useAsAreaExceeder),
     getSubs = getSubsCreator(splitSub);
 
@@ -183,14 +265,12 @@ try {
     mockLr = syncLrAttributes(dataLr, bunchLrs['mock']);
 
     // MAIN LOGIC
-    // обращаться по индексу массива к строке, которая будет содержать последний видимый символ в слое реальных данных
-    var subs = getSubs(dataLr, mockLr).join('\n');
-    alert(subs);
-    mockLr.sourceText.setValue(subs);
+    var subs = getSubs(dataLr, mockLr);
+    var lastBoxRowId = getLastSubIdIfExceedsByHeight(subs, dataLr);
+    var exceededSub = calcExceededSub(subs, lastBoxRowId, testStr);
+    alert(exceededSub);
 
-    alert('width' + '\n\n' + 'data: ' + '\t' + getContentDimensions(dataLr)['w'] + '\n' + 'mock: ' + '\t' + getContentDimensions(dataLr)['w']);
-    alert('height' + '\n\n' + 'data: ' + '\t' + getContentDimensions(dataLr)['h'] + '\n' + 'mock: ' + '\t' + getContentDimensions(mockLr)['h']);
-    // alert(subs.join('\n'));
+    removeLayers(mockLr);
 } catch (e) {
-    alert(e.message)
+    alert(e.message);
 }
