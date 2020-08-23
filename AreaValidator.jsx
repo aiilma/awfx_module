@@ -6,16 +6,13 @@
 // TODO: класс должен решать проблему для слоёв только с горизонтальным текстом
 // TODO: найти места, в которых можно выбрасывать исключение
 
-function AreaValidator(createLrCb, syncLrCb, getContentDimensionsCb, putCharCb) {
+function AreaValidator(textLrHelper) {
     this._INIT = false;
     this._dLr = null;
     this._mLr = null;
     this._exceededSub = '';
 
-    this._createLr = createLrCb;
-    this._syncLr = syncLrCb;
-    this._getContentDimensionsCb = getContentDimensionsCb;
-    this._putCharCb = putCharCb;
+    this._textLrHelper = textLrHelper;
 }
 
 var AreaValidatorPrototype = {};
@@ -44,8 +41,8 @@ AreaValidator.prototype._init = function (dLr) {
     this._dLr = dLr;
 
     // init a serve layer
-    this._mLr = this._createLr('mock', false);
-    this._syncLr(this._dLr, this._mLr);
+    this._mLr = this._textLrHelper.create('mock', false);
+    this._textLrHelper.syncAttrs(this._dLr, this._mLr);
     this._INIT = true;
 }
 
@@ -96,22 +93,22 @@ AreaValidator.prototype._getRowByWidth = function () {
 }
 
 AreaValidator.prototype._willExceedByWidthAfterPut = function (ch) {
-    var maxWidthArea = this._getContentDimensionsCb(this._dLr)['w'];
+    var maxWidthArea = this._textLrHelper.getContentDimensions(this._dLr)['w'];
     var oldText = this._mLr.sourceText.value.text, result;
 
-    this._putCharCb(this._mLr)(ch);
-    result = (this._getContentDimensionsCb(this._mLr)['w'] > maxWidthArea);
+    this._textLrHelper.putChar(this._mLr)(ch);
+    result = (this._textLrHelper.getContentDimensions(this._mLr)['w'] > maxWidthArea);
 
     this._mLr.sourceText.setValue(oldText); // revert old text
     return result;
 }
 
 AreaValidator.prototype._willExceedByHeightAfterPut = function (dupLr, row) {
-    var maxHeightArea = this._getContentDimensionsCb(this._dLr)['h'];
+    var maxHeightArea = this._textLrHelper.getContentDimensions(this._dLr)['h'];
     var oldText = dupLr.sourceText.value.text, result;
 
-    this._putCharCb(dupLr)(row);
-    result = (this._getContentDimensionsCb(dupLr)['h'] > maxHeightArea);
+    this._textLrHelper.putChar(dupLr)(row);
+    result = (this._textLrHelper.getContentDimensions(dupLr)['h'] > maxHeightArea);
 
     dupLr.sourceText.setValue(oldText); // revert old text
     return result;
