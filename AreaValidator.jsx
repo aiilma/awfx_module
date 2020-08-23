@@ -1,9 +1,9 @@
 #include 'AreaValidationError.jsx';
 
-// TODO: класс должен решать проблему для слоёв только с горизонтальным текстом
-// TODO: _willExceedByWidthAfterPut И _willExceedByHeightAfterPut аналогичны (извлечь в один метод)
-// TODO: упростить _getLastRowIdIfExceedsByHeight
 // TODO: конструктор класса не должен принимать callbacks (вынести в отдельный класс по работе со слоями)
+// TODO: упростить _getLastRowIdIfExceedsByHeight
+// TODO: _willExceedByWidthAfterPut И _willExceedByHeightAfterPut аналогичны (извлечь в один метод)
+// TODO: класс должен решать проблему для слоёв только с горизонтальным текстом
 // TODO: найти места, в которых можно выбрасывать исключение
 
 function AreaValidator(createLrCb, syncLrCb, getContentDimensionsCb, putCharCb) {
@@ -17,6 +17,11 @@ function AreaValidator(createLrCb, syncLrCb, getContentDimensionsCb, putCharCb) 
     this._getContentDimensionsCb = getContentDimensionsCb;
     this._putCharCb = putCharCb;
 }
+
+var AreaValidatorPrototype = {};
+AreaValidatorPrototype.prototype = Object.prototype;
+AreaValidator.prototype = AreaValidatorPrototype;
+AreaValidator.prototype.constructor = AreaValidator;
 
 AreaValidator.prototype.validate = function (dLr) {
     this._init(dLr);
