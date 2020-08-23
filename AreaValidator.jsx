@@ -1,8 +1,6 @@
 #include 'AreaValidationError.jsx';
 
-// TODO: конструктор класса не должен принимать callbacks (вынести в отдельный класс по работе со слоями)
 // TODO: упростить _getLastRowIdIfExceedsByHeight
-// TODO: _willExceedByWidthAfterPut И _willExceedByHeightAfterPut аналогичны (извлечь в один метод)
 // TODO: класс должен решать проблему для слоёв только с горизонтальным текстом
 // TODO: найти места, в которых можно выбрасывать исключение
 
@@ -82,7 +80,7 @@ AreaValidator.prototype._getRowByWidth = function () {
     for (var i = 0; i < oldText.length; i++) {
         var ch = oldText[i];
 
-        if (this._willExceedByWidthAfterPut(ch)) break;
+        if (this._willExceedAfterPut('w', this._mLr, ch)) break;
 
         sub = sub.concat(ch);
         this._mLr.sourceText.setValue(sub);
@@ -92,32 +90,23 @@ AreaValidator.prototype._getRowByWidth = function () {
     return sub;
 }
 
-AreaValidator.prototype._willExceedByWidthAfterPut = function (ch) {
-    var maxWidthArea = this._textLrHelper.getContentDimensions(this._dLr)['w'];
-    var oldText = this._mLr.sourceText.value.text, result;
+AreaValidator.prototype._willExceedAfterPut = function (dim, lr, subStr) {
+    var maxHeightArea = this._textLrHelper.getContentDimensions(this._dLr)[dim],
+        oldText = lr.sourceText.value.text,
+        result;
 
-    this._textLrHelper.putChar(this._mLr)(ch);
-    result = (this._textLrHelper.getContentDimensions(this._mLr)['w'] > maxWidthArea);
+    this._textLrHelper.putChar(lr)(subStr);
+    result = (this._textLrHelper.getContentDimensions(lr)[dim] > maxHeightArea);
 
-    this._mLr.sourceText.setValue(oldText); // revert old text
-    return result;
-}
-
-AreaValidator.prototype._willExceedByHeightAfterPut = function (dupLr, row) {
-    var maxHeightArea = this._textLrHelper.getContentDimensions(this._dLr)['h'];
-    var oldText = dupLr.sourceText.value.text, result;
-
-    this._textLrHelper.putChar(dupLr)(row);
-    result = (this._textLrHelper.getContentDimensions(dupLr)['h'] > maxHeightArea);
-
-    dupLr.sourceText.setValue(oldText); // revert old text
+    lr.sourceText.setValue(oldText); // revert old text
     return result;
 }
 
 AreaValidator.prototype._getLastRowIdIfExceedsByHeight = function (rowsArr) {
     // дублировать слой с данными
-    var dataLrDuplicate = this._dLr.duplicate();
-    var textDocument = dataLrDuplicate.sourceText.value;
+    var dataLrDuplicate = this._dLr.duplicate(),
+        textDocument = dataLrDuplicate.sourceText.value;
+
     textDocument.boxTextSize = [textDocument.boxTextSize[0], textDocument.boxTextSize[1] * 2]; // высота box'a в два раза > от высоты слоя с данными
     textDocument.text = ""; // очистить текст дублированного слоя
     dataLrDuplicate.sourceText.setValue(textDocument);
@@ -126,7 +115,7 @@ AreaValidator.prototype._getLastRowIdIfExceedsByHeight = function (rowsArr) {
         var row = rowsArr[i];
 
         // если i-ая строка может превысеть высоту слоя с данными, то вернуть индекс текущей строки
-        if (this._willExceedByHeightAfterPut(dataLrDuplicate, row)) {
+        if (this._willExceedAfterPut('h', dataLrDuplicate, row)) {
             this._unsetLayers(dataLrDuplicate);
             return i;
         }

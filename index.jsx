@@ -3,7 +3,8 @@
 
 // PREPARE PROJECT
 var p = app.project.activeItem, // текущая композиция (main при тестах)
-    lrs = p.layers, dataLr, v, helper;
+    lrs = p.layers,
+    dataLr, v, helper;
 
 try {
     helper = new AWTextLayerHelper(lrs);
