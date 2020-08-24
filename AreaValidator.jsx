@@ -1,14 +1,21 @@
 #include 'AreaValidationError.jsx';
 
+// TODO: продумать обработку слоев с одинаковыми именами
+
 // TODO: упростить _getLastRowIdIfExceedsByHeight
+
 // TODO: класс должен решать проблему для слоёв только с горизонтальным текстом
-// TODO: найти места, в которых можно выбрасывать исключение
+//  (проверить гипотезу: измерить слой - создать новый слой (+синхра стилей и текста) - измерить слой).
+//  сравнить значения измерений... если значения разные, то текст в слое был вертикальный.
+
+// TODO: найти места, в которых можно выбрасывать исключение (в обоих классах)
+// TODO: продумать обработку выбрасываемых исключений (возможно, запись в файл)
 
 function AreaValidator(textLrHelper) {
     this._INIT = false;
-    this._dLr = null;
     this._mLr = null;
-    this._exceededSub = '';
+    this._dataLayers = [];
+    this._dataErrors = [];
 
     this._textLrHelper = textLrHelper;
 }
@@ -18,8 +25,8 @@ AreaValidatorPrototype.prototype = Object.prototype;
 AreaValidator.prototype = AreaValidatorPrototype;
 AreaValidator.prototype.constructor = AreaValidator;
 
-AreaValidator.prototype.validate = function (dLr) {
-    this._init(dLr);
+AreaValidator.prototype.validate = function (dataLayers) {
+    this._init(dataLayers);
 
     this._process();
 
@@ -29,82 +36,101 @@ AreaValidator.prototype.validate = function (dLr) {
 }
 
 AreaValidator.prototype.passes = function() {
-    return !this._exceededSub.length;
+    return !this._dataErrors.length;
 }
 
-AreaValidator.prototype._init = function (dLr) {
+AreaValidator.prototype.getErrors = function() {
+    // TODO: возвращать массив ошибок
+    return this._dataErrors;
+}
+
+AreaValidator.prototype._init = function (dataLayers) {
     // init a data layer
-    if (!(dLr instanceof TextLayer)) throw new Error("A layer of type TextLayer must be passed.");
-    if (!(dLr.sourceText.value.boxText)) throw new Error(dLr.name + " must be bounded.");
-    this._dLr = dLr;
+    for (var idx = 0; idx < dataLayers.length; idx++) {
+        var lr = dataLayers[idx];
+
+        if (!(lr instanceof TextLayer)) throw new Error("A layer of type TextLayer must be passed.");
+        if (!(lr.sourceText.value.boxText)) throw new Error(lr.name + " must be bounded.");
+    }
+    this._dataLayers = dataLayers;
 
     // init a serve layer
     this._mLr = this._textLrHelper.create('mock', false);
-    this._textLrHelper.syncAttrs(this._dLr, this._mLr);
     this._INIT = true;
 }
 
 AreaValidator.prototype._process = function () {
-    var rows = this._splitIntoRows();
-    var id = this._getLastRowIdIfExceedsByHeight(rows);
+    var dataLrs = this._dataLayers
 
-    if (id !== undefined) {
-        this._exceededSub = this._extractExceededRow(rows, id);
+    for (var idx = 0; idx < dataLrs.length; idx++) {
+        var dataLr = dataLrs[idx],
+            rows, lastRowId;
+
+        this._textLrHelper.syncAttrs(dataLr, this._mLr);
+
+        rows = this._splitIntoRows(dataLr);
+        lastRowId = this._getLastRowIdIfExceedsByHeight(dataLr, rows);
+
+        if (lastRowId !== undefined) {
+            var error = dataLr;
+            error['exceeded'] = this._extractExceededRow(dataLr, rows, lastRowId);
+            this._dataErrors.push(error);
+        }
     }
 }
 
-AreaValidator.prototype._splitIntoRows = function () {
-    var oldText = this._mLr.sourceText.value.text; // нужен ли mockText.. может, убрать, чтобы зависеть от основного (обрезая его по условию) и закидывать буковки в результирующую строку
+AreaValidator.prototype._splitIntoRows = function (dataLr) {
+    var mockLr = this._mLr;
+    var oldText = mockLr.sourceText.value.text; // нужен ли mockText.. может, убрать, чтобы зависеть от основного (обрезая его по условию) и закидывать буковки в результирующую строку
     var subs = [];
 
-    while (this._mLr.sourceText.value.text.length) {
+    while (mockLr.sourceText.value.text.length) {
         // извлечь подстроку
-        var newSub = this._getRowByWidth(this._dLr, this._mLr);
-        // закинуть её в массив подстрок
+        var newSub = this._getRowByWidth(dataLr, mockLr);
         subs.push(newSub);
 
         // обновить значение слоя до обрезанного с самого начала по длинне подстроки
-        var updatedText = (this._mLr.sourceText.value.text).slice(newSub.length);
-        this._mLr.sourceText.setValue(updatedText);
+        var updatedText = (mockLr.sourceText.value.text).slice(newSub.length);
+        mockLr.sourceText.setValue(updatedText);
     }
 
-    this._mLr.sourceText.setValue(oldText);
+    mockLr.sourceText.setValue(oldText);
     return subs;
 }
 
-AreaValidator.prototype._getRowByWidth = function () {
-    var oldText = this._mLr.sourceText.value.text;
+AreaValidator.prototype._getRowByWidth = function (dataLr, mockLr) {
+    var oldText = mockLr.sourceText.value.text;
     var sub = '';
-    this._mLr.sourceText.setValue(sub);
+    mockLr.sourceText.setValue(sub);
 
     for (var i = 0; i < oldText.length; i++) {
         var ch = oldText[i];
 
-        if (this._willExceedAfterPut('w', this._mLr, ch)) break;
+        if (this._willExceedAfterPut('w', dataLr, mockLr, ch)) break;
 
         sub = sub.concat(ch);
-        this._mLr.sourceText.setValue(sub);
+        mockLr.sourceText.setValue(sub);
     }
 
-    this._mLr.sourceText.setValue(oldText);
+    mockLr.sourceText.setValue(oldText);
     return sub;
 }
 
-AreaValidator.prototype._willExceedAfterPut = function (dim, lr, subStr) {
-    var maxHeightArea = this._textLrHelper.getContentDimensions(this._dLr)[dim],
-        oldText = lr.sourceText.value.text,
+AreaValidator.prototype._willExceedAfterPut = function (dim, dataLr, fakeLr, subStr) {
+    var maxHeightArea = this._textLrHelper.getContentDimensions(dataLr)[dim],
+        oldText = fakeLr.sourceText.value.text,
         result;
 
-    this._textLrHelper.putChar(lr)(subStr);
-    result = (this._textLrHelper.getContentDimensions(lr)[dim] > maxHeightArea);
+    this._textLrHelper.putChar(fakeLr)(subStr);
+    result = (this._textLrHelper.getContentDimensions(fakeLr)[dim] > maxHeightArea);
 
-    lr.sourceText.setValue(oldText); // revert old text
+    fakeLr.sourceText.setValue(oldText); // revert old text
     return result;
 }
 
-AreaValidator.prototype._getLastRowIdIfExceedsByHeight = function (rowsArr) {
+AreaValidator.prototype._getLastRowIdIfExceedsByHeight = function (dataLr, rowsArr) {
     // дублировать слой с данными
-    var dataLrDuplicate = this._dLr.duplicate(),
+    var dataLrDuplicate = dataLr.duplicate(),
         textDocument = dataLrDuplicate.sourceText.value;
 
     textDocument.boxTextSize = [textDocument.boxTextSize[0], textDocument.boxTextSize[1] * 2]; // высота box'a в два раза > от высоты слоя с данными
@@ -115,12 +141,12 @@ AreaValidator.prototype._getLastRowIdIfExceedsByHeight = function (rowsArr) {
         var row = rowsArr[i];
 
         // если i-ая строка может превысеть высоту слоя с данными, то вернуть индекс текущей строки
-        if (this._willExceedAfterPut('h', dataLrDuplicate, row)) {
+        if (this._willExceedAfterPut('h', dataLr, dataLrDuplicate, row)) {
             this._unsetLayers(dataLrDuplicate);
             return i;
         }
 
-        // положить i-ую строку из subs в дубликат
+        // извлечь i-ую строку из rowsArr в дубликат
         var newStr = (dataLrDuplicate.sourceText.value.text).concat(row);
         dataLrDuplicate.sourceText.setValue(newStr);
     }
@@ -129,8 +155,9 @@ AreaValidator.prototype._getLastRowIdIfExceedsByHeight = function (rowsArr) {
     return undefined;
 }
 
-AreaValidator.prototype._extractExceededRow = function (rows, lastBoxRowId) {
-    var fullStr = this._dLr.sourceText.value.text, visibleSub = '';
+AreaValidator.prototype._extractExceededRow = function (dataLr, rows, lastBoxRowId) {
+    var fullStr = dataLr.sourceText.value.text,
+        visibleSub = '';
 
     for (var idx = 0; idx < lastBoxRowId; idx++) {
         visibleSub = visibleSub.concat(rows[idx]);
@@ -152,7 +179,7 @@ AreaValidator.prototype._unsetLayers = function() {
 }
 
 // ~~~~~API~~~~~:
-// v.validate(AWTextLayer);
-// v.validate(AWTextLayer).passes();
+// v.validate(dataLayers);
+// v.validate(dataLayers).passes();
 
-// v.validate(AWTextLayer).getErrros();
+// v.validate(dataLayers).getErrros();
