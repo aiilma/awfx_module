@@ -4,15 +4,28 @@
 // PREPARE PROJECT
 var p = app.project.activeItem, // текущая композиция (main при тестах)
     lrs = p.layers,
-    dataLr, v, helper;
+    dataLrs, v, helper;
+
+
+var data = [
+    {
+        "layerName": "username",
+        // "value": ""
+        // "value": "abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaawwwwwwwiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiihhhoeoeoaeaoeaoaaaaaaaaemm,aoccmjw,aw,wuwiwiiiiicca"
+        "value": "abmeoa,d.guccuiigiigaceiiiiiiiiiiiiiiaawwwwwwwiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiihh"
+    },
+    {
+        "layerName": "twitch",
+        "value": "twitch.tv/ahmed",
+    }
+];
 
 try {
     helper = new AWTextLayerHelper(lrs);
     v = new AreaValidator(helper);
 
-    dataLr = helper.getFirstByName('data');
-    var res = v.validate(dataLr);
-
+    dataLrs = helper.setValuesIntoLayers(data).getLayers(data);
+    var res = v.validate(dataLrs);
     alert(res.passes());
 
 } catch (e) {

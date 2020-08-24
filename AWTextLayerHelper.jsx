@@ -74,6 +74,30 @@ AWTextLayerHelper.prototype.putChar = function (lr) {
         lr.sourceText.setValue(newText);
     }
 }
+AWTextLayerHelper.prototype.setValuesIntoLayers = function (data) {
+    for (var idx = 0; idx < data.length; idx++) {
+        var layerName = data[idx]['layerName'];
+        var value = data[idx]['value'];
+
+        var lr = this.getFirstByName(layerName);
+        // if not TextObject throw error
+        lr.sourceText.setValue(value);
+    }
+
+    return this;
+}
+AWTextLayerHelper.prototype.getLayers = function (data) {
+    var layers = [];
+
+    for (var idx = 0; idx < data.length; idx++) {
+        var layerName = data[idx]['layerName'],
+            lr = this.getFirstByName(layerName);
+
+        layers.push(lr);
+    }
+
+    return layers;
+}
 
 // API
 // l = new AWTextLayerHelper(lrs);
